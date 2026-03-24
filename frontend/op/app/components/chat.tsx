@@ -1,17 +1,18 @@
-"use client"; // Bắt buộc ở Next.js App Router khi dùng Hooks
+"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ethers } from "ethers";
-import Image from "next/image"; // Giải quyết lỗi @next/next/no-img-element
+import Image from "next/image";
 import mainLogo from "../../public/Goku instinto superior.jpg";
+import contractAddress from "../contract-address/contract-address.json";
+// /artifacts/contracts bị bỏ qua bởi .gitignore,
+// nó chỉ có sau khi bạn chạy script deploy deploy-chatapp.ts để tạo ra ChatApp.json
+import ChatAppArtifact from "../../the-exercises-hardhat/artifacts/contracts/ChatApp.sol/ChatApp.json";
 
-import ChatAppArtifact from "../abis/ChatApp.json";
-import contractAddressFile from "../abis/contract-address.json";
+// /contract-address bị bỏ qua bởi .gitignore,
+// nó chỉ có sau khi bạn chạy script deploy deploy-chatapp.ts để tạo ra contract-address.json
+const CONTRACT_ADDRESS = contractAddress.contractAddress as string;
 
-// Tự động lấy địa chỉ mới nhất
-const CONTRACT_ADDRESS = contractAddressFile.ChatApp;
-
-// Khai báo kiểu dữ liệu (Giải quyết lỗi mảng 'never' và implicitly '{ content: string; sender: string }')
 interface Message {
   msg: string;
   isResponse: boolean;
@@ -24,7 +25,6 @@ interface BlockchainData {
 }
 
 export default function Chat() {
-  // Thêm định dạng Type cho useState (Giải quyết lỗi 2345, 2339)
   const [account, setAccount] = useState<string>("");
   const [otherAccount, setOtherAccount] = useState<string>("");
   const [contract, setContract] = useState<ethers.Contract | null>(null);
@@ -89,7 +89,7 @@ export default function Chat() {
       try {
         const provider = new ethers.BrowserProvider(winEth);
 
-        // Luôn cập nhật số dư của bạn
+        // Luôn cập nhật số dư
         const myBal = await provider.getBalance(account);
         const blockNum = await provider.getBlockNumber();
 
@@ -126,6 +126,8 @@ export default function Chat() {
       const userAddress = await signer.getAddress();
       const network = await provider.getNetwork();
 
+      console.log("network:", network);
+
       // re-render self
       const myBal = await provider.getBalance(userAddress);
       const blockNum = await provider.getBlockNumber();
@@ -136,7 +138,7 @@ export default function Chat() {
       }));
 
       setNetworkInfo({
-        name: network.name,
+        name: network.name === "unknown" ? "Flare Coston2 (Testnet) nên không có tên 9 xác" : network.name,
         chainId: network.chainId.toString(),
       });
 
@@ -151,7 +153,7 @@ export default function Chat() {
       const code = await provider.getCode(CONTRACT_ADDRESS);
       if (!code || code === "0x") {
         console.error("Không tìm thấy code contract tại", CONTRACT_ADDRESS);
-        alert("Địa chỉ hợp đồng không hợp lệ trên mạng hiện tại. Vui lòng kiểm tra lại contract-address.json và network trong MetaMask.");
+        alert("Địa chỉ hợp đồng không hợp lệ trên mạng hiện tại. Vui lòng kiểm tra lại network trong MetaMask hoặc chạy lại script deploy để cập nhật ChatApp.json.");
         return;
       }
 
@@ -229,7 +231,6 @@ export default function Chat() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 md:p-8 font-sans">
-      {/* Container chính dùng Grid: 12 cột */}
       <div className="grid grid-cols-1 md:grid-cols-12 w-full max-w-6xl bg-white rounded-3xl shadow-xl overflow-hidden h-[85vh] border border-slate-200">
         {/* CỘT TRÁI: Khu vực Chat (Chiếm 8/12 cột) */}
         <div className="md:col-span-8 flex flex-col border-r border-slate-100">
@@ -317,27 +318,24 @@ export default function Chat() {
         {/* CỘT PHẢI: Thông tin Blockchain (Chiếm 4/12 cột) */}
         <div className="md:col-span-4 bg-slate-50 p-6 flex flex-col gap-6 overflow-y-auto">
           <div>
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-2">
-              <span>Mạng lưới</span>
+            <h2 className="text-sm font-bold text-slate-600 tracking-widest mb-1 flex items-center gap-2">
               {networkInfo.name && (
-                <span className="text-[10px] font-semibold text-slate-500 normal-case">
+                <span >
                   {networkInfo.name} · ChainId {networkInfo.chainId}
                 </span>
               )}
             </h2>
-            <p className="text-3xl font-black text-slate-800">
-              {blockchainData.nbBlocks}{" "}
-              <span className="text-xs font-medium text-slate-400">Blocks</span>
+            <p className="text-2xl font-black text-slate-800">
+              {blockchainData.nbBlocks}{" "} Blocks
             </p>
           </div>
 
           <div className="space-y-4">
-            {/* Box Ví của bạn */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <h4 className="text-[12px] font-bold text-indigo-500 uppercase mb-2">
                 Ví của bạn
               </h4>
-              <p className="text-[11px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2">
+              <p className="text-[12px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2">
                 {account || "Đang kết nối..."}
               </p>
               <div className="flex justify-between items-baseline">
@@ -350,12 +348,11 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* Box Ví người nhận */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
               <h4 className="text-[12px] font-bold text-pink-500 uppercase mb-2">
                 Ví người nhận
               </h4>
-              <p className="text-[11px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2">
+              <p className="text-[12px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2">
                 {otherAccount || "0x..."}
               </p>
               <div className="flex justify-between items-baseline">
@@ -369,7 +366,6 @@ export default function Chat() {
             </div>
           </div>
 
-          {/* Trạng thái kết nối */}
           <div className="mt-auto flex items-center gap-2 py-2 px-3 bg-white rounded-lg border border-slate-200">
             <div
               className={`w-2 h-2 rounded-full ${account ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
