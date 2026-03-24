@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My First DApp</title>
+    <link rel="icon" href="images/goku.jpg" type="image/jpeg">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Web3 Connect</h1>
+        <div id="statusCard" class="card">
+            <button id="connectBtn">Kết nối ví MetaMask</button>
+            <div id="info" class="hidden">
+                <p><strong>Địa chỉ:</strong> <span id="account"></span></p>
+                <p><strong>Số dư:</strong> <span id="balance"></span> ETH</p>
+                <p><strong>Mạng:</strong> <span id="network"></span></p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
