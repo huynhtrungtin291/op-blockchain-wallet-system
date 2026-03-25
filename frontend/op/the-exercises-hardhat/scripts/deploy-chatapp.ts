@@ -4,17 +4,22 @@ import path from "path";
 
 async function main() {
     const chatApp = await ethers.deployContract("ChatApp");
-
     await chatApp.waitForDeployment();
 
-    const contractAddress = await chatApp.getAddress();
-    console.log(`ChatApp đã được triển khai tại địa chỉ: ${contractAddress}`);
+    const opCoin = await ethers.deployContract("OPCoin");
+    await opCoin.waitForDeployment();
+
+    const chatAppContractAddress = await chatApp.getAddress();
+    const opCoinContractAddress = await opCoin.getAddress();
+
+    console.log(`ChatApp đã được triển khai tại địa chỉ: ${chatAppContractAddress}`);
+    console.log(`OPCoin đã được triển khai tại địa chỉ: ${opCoinContractAddress}`);
 
     // Tự động xuất dữ liệu sang thư mục Next.js (Frontend)
-    exportContractAddress(contractAddress);
+    exportContractAddress(chatAppContractAddress, opCoinContractAddress);
 }
 
-function exportContractAddress(contractAddress: string) {
+function exportContractAddress(chatAppAddress: string, opCoinAddress: string) {
     const caDir = path.join(__dirname, "../../app/contract-address");
     // Tạo thư mục nếu chưa tồn tại
     if (!fs.existsSync(caDir)) {
@@ -23,7 +28,10 @@ function exportContractAddress(contractAddress: string) {
     // Lưu địa chỉ Contract vào một file JSON
     fs.writeFileSync(
         path.join(caDir, "contract-address.json"),
-        JSON.stringify({ contractAddress }, null, 2)
+        JSON.stringify({
+            chatAppAddress: chatAppAddress,
+            opCoinAddress: opCoinAddress
+        }, null, 2)
     );
 }
 

@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+// Import interface của ERC20 để ChatApp hiểu cách giao tiếp với OPCoin
+interface IERC20 {
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+}
+
 contract ChatApp {
-    
     struct Message {
         address sender;
         string content;
@@ -13,14 +21,27 @@ contract ChatApp {
     mapping(bytes32 => Message[]) private conversationMessages;
 
     // Chuẩn hóa tên Event (Viết hoa chữ cái đầu)
-    event MessageSent(address indexed from, address indexed to, string message, uint256 timestamp);
-    event EtherSent(address indexed from, address indexed to, uint256 amount, bool success);
+    event MessageSent(
+        address indexed from,
+        address indexed to,
+        string message,
+        uint256 timestamp
+    );
+    event EtherSent(
+        address indexed from,
+        address indexed to,
+        uint256 amount,
+        bool success
+    );
 
     /**
      * @dev Tạo ra một ID duy nhất cho đoạn chat giữa 2 người.
      * Dù A nhắn cho B hay B nhắn cho A, ID sinh ra luôn giống hệt nhau.
      */
-    function _getConversationId(address user1, address user2) private pure returns (bytes32) {
+    function _getConversationId(
+        address user1,
+        address user2
+    ) private pure returns (bytes32) {
         if (user1 < user2) {
             return keccak256(abi.encodePacked(user1, user2));
         } else {
@@ -37,13 +58,15 @@ contract ChatApp {
 
         // Tính toán ID phòng chat
         bytes32 convoId = _getConversationId(msg.sender, to);
-        
+
         // Chỉ lưu 1 lần duy nhất (Tiết kiệm 50% phí Gas so với code cũ)
-        conversationMessages[convoId].push(Message({
-            sender: msg.sender,
-            content: _content,
-            timestamp: block.timestamp
-        }));
+        conversationMessages[convoId].push(
+            Message({
+                sender: msg.sender,
+                content: _content,
+                timestamp: block.timestamp
+            })
+        );
 
         emit MessageSent(msg.sender, to, _content, block.timestamp);
     }
@@ -52,7 +75,9 @@ contract ChatApp {
      * @dev Lấy toàn bộ tin nhắn giữa người gọi hàm và một người khác
      * Không cần dùng Event để trả data như code cũ, hàm view sẽ trả thẳng về mảng cho React.
      */
-    function getMessages(address otherUser) external view returns (Message[] memory) {
+    function getMessages(
+        address otherUser
+    ) external view returns (Message[] memory) {
         bytes32 convoId = _getConversationId(msg.sender, otherUser);
         return conversationMessages[convoId];
     }
@@ -69,5 +94,32 @@ contract ChatApp {
         require(success, "Failed to send Ether");
 
         emit EtherSent(msg.sender, to, msg.value, success);
+    }
+
+    /**
+     * @dev Gửi OP Coin giữa các người dùng trong Chat
+     * @param tokenContractAddress Địa chỉ của hợp đồng OPCoin sau khi deploy
+     * @param to Địa chỉ ví người nhận
+     * @param amount Số lượng token (Ví dụ: 10 * 10**18)
+     */
+    function sendOPCoin(
+        address tokenContractAddress,
+        address to,
+        uint256 amount
+    ) external {
+        require(to != address(0), "Recipient is zero address");
+        require(amount > 0, "Amount must be > 0");
+
+        // ChatApp yêu cầu OPCoin chuyển tiền từ ví người gọi (msg.sender) sang 'to'
+        bool success = IERC20(tokenContractAddress).transferFrom(
+            msg.sender,
+            to,
+            amount
+        );
+
+        require(success, "OP Coin transfer failed");
+
+        // Emit thêm một event để UI React cập nhật trạng thái
+        emit EtherSent(msg.sender, to, amount, success);
     }
 }

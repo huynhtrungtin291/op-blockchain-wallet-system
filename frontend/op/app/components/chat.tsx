@@ -8,10 +8,12 @@ import contractAddress from "../contract-address/contract-address.json";
 // /artifacts/contracts bị bỏ qua bởi .gitignore,
 // nó chỉ có sau khi bạn chạy script deploy deploy-chatapp.ts để tạo ra ChatApp.json
 import ChatAppArtifact from "../../the-exercises-hardhat/artifacts/contracts/ChatApp.sol/ChatApp.json";
+import OPCoinArtifact from "../../the-exercises-hardhat/artifacts/contracts/OPCoin.sol/OPCoin.json";
 
 // /contract-address bị bỏ qua bởi .gitignore,
 // nó chỉ có sau khi bạn chạy script deploy deploy-chatapp.ts để tạo ra contract-address.json
-const CONTRACT_ADDRESS = contractAddress.contractAddress as string;
+const CHATAPP_CONTRACT_ADDRESS = contractAddress.chatAppAddress as string;
+const OPCOIN_CONTRACT_ADDRESS = contractAddress.opCoinAddress as string;
 
 interface Message {
   msg: string;
@@ -19,8 +21,8 @@ interface Message {
 }
 
 interface BlockchainData {
-  accountBalance: string;
-  otherAccountBalance: string;
+  accountOpBalance: string;
+  otherAccountOpBalance: string;
   nbBlocks: number;
 }
 
@@ -28,12 +30,13 @@ export default function Chat() {
   const [account, setAccount] = useState<string>("");
   const [otherAccount, setOtherAccount] = useState<string>("");
   const [contract, setContract] = useState<ethers.Contract | null>(null);
+  const [opCoinContract, setOpCoinContract] = useState<ethers.Contract | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
-  const [amountEth, setAmountEth] = useState<string>("");
+  const [amountOp, setAmountOp] = useState<string>("");
   const [blockchainData, setBlockchainData] = useState<BlockchainData>({
-    accountBalance: "0",
-    otherAccountBalance: "0",
+    accountOpBalance: "0",
+    otherAccountOpBalance: "0",
     nbBlocks: 0,
   });
   const [networkInfo, setNetworkInfo] = useState<{
@@ -84,25 +87,24 @@ export default function Chat() {
   const updateBalances = useCallback(
     async (partnerAddress?: string) => {
       const winEth = window.ethereum;
-      if (!winEth || !account) return;
+      if (!winEth || !account || !opCoinContract) return;
 
       try {
         const provider = new ethers.BrowserProvider(winEth);
+        const [myOpBalRaw, blockNum] = await Promise.all([
+          opCoinContract.balanceOf(account),
+          provider.getBlockNumber(),
+        ]);
 
-        // Luôn cập nhật số dư
-        const myBal = await provider.getBalance(account);
-        const blockNum = await provider.getBlockNumber();
-
-        // Chỉ cập nhật số dư người nhận nếu địa chỉ hợp lệ
-        let otherBal = ethers.parseEther("0");
+        let otherOpBalRaw = ethers.parseUnits("0", 18);
         if (partnerAddress && ethers.isAddress(partnerAddress)) {
-          otherBal = await provider.getBalance(partnerAddress);
+          otherOpBalRaw = await opCoinContract.balanceOf(partnerAddress);
         }
 
         setBlockchainData({
-          accountBalance: ethers.formatEther(myBal),
-          otherAccountBalance: partnerAddress
-            ? ethers.formatEther(otherBal)
+          accountOpBalance: ethers.formatUnits(myOpBalRaw, 18),
+          otherAccountOpBalance: partnerAddress
+            ? ethers.formatUnits(otherOpBalRaw, 18)
             : "0",
           nbBlocks: blockNum,
         });
@@ -110,7 +112,7 @@ export default function Chat() {
         console.error("Lỗi cập nhật số dư:", error);
       }
     },
-    [account],
+    [account, opCoinContract],
   );
 
   useEffect(() => {
@@ -128,15 +130,6 @@ export default function Chat() {
 
       console.log("network:", network);
 
-      // re-render self
-      const myBal = await provider.getBalance(userAddress);
-      const blockNum = await provider.getBlockNumber();
-      setBlockchainData(prev => ({
-        ...prev,
-        accountBalance: ethers.formatEther(myBal),
-        nbBlocks: blockNum
-      }));
-
       setNetworkInfo({
         name: network.name === "unknown" ? "Flare Coston2 (Testnet) nên không có tên 9 xác" : network.name,
         chainId: network.chainId.toString(),
@@ -145,19 +138,36 @@ export default function Chat() {
       setAccount(userAddress);
 
       const chatContract = new ethers.Contract(
-        CONTRACT_ADDRESS,
+        CHATAPP_CONTRACT_ADDRESS,
         ChatAppArtifact.abi,
         signer,
       );
 
-      const code = await provider.getCode(CONTRACT_ADDRESS);
+      const opContract = new ethers.Contract(
+        OPCOIN_CONTRACT_ADDRESS,
+        OPCoinArtifact.abi,
+        signer,
+      );
+
+      const code = await provider.getCode(CHATAPP_CONTRACT_ADDRESS);
       if (!code || code === "0x") {
-        console.error("Không tìm thấy code contract tại", CONTRACT_ADDRESS);
+        console.error("Không tìm thấy code contract tại", CHATAPP_CONTRACT_ADDRESS);
         alert("Địa chỉ hợp đồng không hợp lệ trên mạng hiện tại. Vui lòng kiểm tra lại network trong MetaMask hoặc chạy lại script deploy để cập nhật ChatApp.json.");
         return;
       }
 
       setContract(chatContract);
+      setOpCoinContract(opContract);
+
+      const [myOpBalRaw, blockNum] = await Promise.all([
+        opContract.balanceOf(userAddress),
+        provider.getBlockNumber(),
+      ]);
+      setBlockchainData(prev => ({
+        ...prev,
+        accountOpBalance: ethers.formatUnits(myOpBalRaw, 18),
+        nbBlocks: blockNum,
+      }));
 
       // Thêm dấu "_" trước các biến không dùng để vượt qua ESLint no-unused-vars
       chatContract.on(
@@ -191,18 +201,37 @@ export default function Chat() {
     }
   };
 
-  const handleSendEther = async () => {
-    if (!amountEth || !otherAccount || !contract) return;
+  const handleSendOPCoin = async () => {
+    if (!amountOp || !otherAccount || !contract || !opCoinContract) return;
 
     try {
-      const wei = ethers.parseEther(amountEth);
-      const tx = await contract.sendEther(otherAccount, { value: wei });
-      setAmountEth("");
+      const amount = ethers.parseUnits(amountOp, 18);
+
+      // Đảm bảo ChatApp có quyền rút token của người gửi
+      const allowance = await opCoinContract.allowance(
+        account,
+        CHATAPP_CONTRACT_ADDRESS,
+      );
+
+      if (allowance < amount) {
+        const approveTx = await opCoinContract.approve(
+          CHATAPP_CONTRACT_ADDRESS,
+          amount,
+        );
+        await approveTx.wait();
+      }
+
+      const tx = await contract.sendOPCoin(
+        OPCOIN_CONTRACT_ADDRESS,
+        otherAccount,
+        amount,
+      );
+      setAmountOp("");
       await tx.wait();
 
       updateBalances(otherAccount);
     } catch (error) {
-      console.error("Lỗi gửi tiền:", error);
+      console.error("Lỗi gửi OP Coin:", error);
     }
   };
 
@@ -215,14 +244,14 @@ export default function Chat() {
   };
 
   useEffect(() => {
-    if (contract && otherAccount && account) {
+    if (contract && otherAccount && account && opCoinContract) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchMessages(contract, otherAccount, account);
       updateBalances(otherAccount);
 
       console.log("Contract instance side effect:", contract);
     }
-  }, [otherAccount, contract, account, fetchMessages, updateBalances]);
+  }, [otherAccount, contract, account, opCoinContract, fetchMessages, updateBalances]);
 
   // Tự động cuộn mỗi khi mảng messages thay đổi
   useEffect(() => {
@@ -296,20 +325,20 @@ export default function Chat() {
             </div>
             <div className="flex gap-2">
               <input
-                value={amountEth}
-                onChange={(e) => setAmountEth(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendEther()}
+                value={amountOp}
+                onChange={(e) => setAmountOp(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendOPCoin()}
                 type="number"
                 step="0.0001"
                 min="0"
-                placeholder="Số lượng ETH muốn gửi"
+                placeholder="Số lượng OP muốn gửi"
                 className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-indigo-500 text-slate-700"
               />
               <button
-                onClick={handleSendEther}
+                onClick={handleSendOPCoin}
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-all active:scale-95"
               >
-                Gửi tiền
+                Gửi OP
               </button>
             </div>
           </div>
@@ -343,7 +372,7 @@ export default function Chat() {
                   SỐ DƯ
                 </span>
                 <span className="text-lg font-bold text-slate-800">
-                  {Number(blockchainData.accountBalance).toFixed(4)} ETH
+                  {Number(blockchainData.accountOpBalance).toFixed(4)} OP
                 </span>
               </div>
             </div>
@@ -360,7 +389,7 @@ export default function Chat() {
                   SỐ DƯ
                 </span>
                 <span className="text-lg font-bold text-slate-800">
-                  {Number(blockchainData.otherAccountBalance).toFixed(4)} ETH
+                  {Number(blockchainData.otherAccountOpBalance).toFixed(4)} OP
                 </span>
               </div>
             </div>
