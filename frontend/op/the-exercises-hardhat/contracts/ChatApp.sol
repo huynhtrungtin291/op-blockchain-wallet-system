@@ -27,7 +27,7 @@ contract ChatApp {
         string message,
         uint256 timestamp
     );
-    event EtherSent(
+    event OPCoinSent(
         address indexed from,
         address indexed to,
         uint256 amount,
@@ -42,7 +42,7 @@ contract ChatApp {
         address user1,
         address user2
     ) private pure returns (bytes32) {
-        if (user1 < user2) {
+        if (user1 < user2) { // Sắp xếp địa chỉ từ nhỏ đến lớn
             return keccak256(abi.encodePacked(user1, user2));
         } else {
             return keccak256(abi.encodePacked(user2, user1));
@@ -93,7 +93,7 @@ contract ChatApp {
         (bool success, ) = to.call{value: msg.value}("");
         require(success, "Failed to send Ether");
 
-        emit EtherSent(msg.sender, to, msg.value, success);
+        emit OPCoinSent(msg.sender, to, msg.value, success);
     }
 
     /**
@@ -106,8 +106,11 @@ contract ChatApp {
         address tokenContractAddress,
         address to,
         uint256 amount
-    ) external {
-        require(to != address(0), "Recipient is zero address");
+    ) external { // Chỉ có thể gọi hàm này từ bên ngoài (từ người dùng, từ hợp đồng khác, từ frontend…).
+
+        // require: Kiểm tra địa chỉ người nhận hợp lệ, 
+        // nếu sai giao dịch tự động revert (hủy bỏ)
+        require(to != address(0), "Recipient is zero address"); 
         require(amount > 0, "Amount must be > 0");
 
         // ChatApp yêu cầu OPCoin chuyển tiền từ ví người gọi (msg.sender) sang 'to'
@@ -119,7 +122,8 @@ contract ChatApp {
 
         require(success, "OP Coin transfer failed");
 
-        // Emit thêm một event để UI React cập nhật trạng thái
-        emit EtherSent(msg.sender, to, amount, success);
+        // Emit thêm một event để UI React 
+        // cập nhật trạng thái (ngoài blockchain).  
+        emit OPCoinSent(msg.sender, to, amount, success);
     }
 }

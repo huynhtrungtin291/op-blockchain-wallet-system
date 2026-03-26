@@ -41,10 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# app generated
-app/abis/
-app/contract-address/
+# # app generated
+# app/abis/
+# app/contract-address/
 
 # hardhat artifacts
-/the-exercises-hardhat/artifacts/
+# /the-exercises-hardhat/artifacts/
 /the-exercises-hardhat/cache/

@@ -30,7 +30,9 @@ export default function Chat() {
   const [account, setAccount] = useState<string>("");
   const [otherAccount, setOtherAccount] = useState<string>("");
   const [contract, setContract] = useState<ethers.Contract | null>(null);
-  const [opCoinContract, setOpCoinContract] = useState<ethers.Contract | null>(null);
+  const [opCoinContract, setOpCoinContract] = useState<ethers.Contract | null>(
+    null,
+  );
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState<string>("");
   const [amountOp, setAmountOp] = useState<string>("");
@@ -54,7 +56,11 @@ export default function Chat() {
       partnerAddress: string,
       currentUser: string,
     ) => {
-      if (!chatContract || !partnerAddress || !ethers.isAddress(partnerAddress)) {
+      if (
+        !chatContract ||
+        !partnerAddress ||
+        !ethers.isAddress(partnerAddress)
+      ) {
         return;
       }
       try {
@@ -64,7 +70,10 @@ export default function Chat() {
         const contractAddress = await chatContract.getAddress();
         const code = await provider.getCode(contractAddress);
         if (!code || code === "0x") {
-          console.error("Không tìm thấy code contract tại", chatContract.address);
+          console.error(
+            "Không tìm thấy code contract tại",
+            chatContract.address,
+          );
           return;
         }
 
@@ -131,7 +140,10 @@ export default function Chat() {
       console.log("network:", network);
 
       setNetworkInfo({
-        name: network.name === "unknown" ? "Flare Coston2 (Testnet) nên không có tên 9 xác" : network.name,
+        name:
+          network.name === "unknown"
+            ? "Flare Coston2 (Testnet) nên không có tên 9 xác"
+            : network.name,
         chainId: network.chainId.toString(),
       });
 
@@ -151,8 +163,13 @@ export default function Chat() {
 
       const code = await provider.getCode(CHATAPP_CONTRACT_ADDRESS);
       if (!code || code === "0x") {
-        console.error("Không tìm thấy code contract tại", CHATAPP_CONTRACT_ADDRESS);
-        alert("Địa chỉ hợp đồng không hợp lệ trên mạng hiện tại. Vui lòng kiểm tra lại network trong MetaMask hoặc chạy lại script deploy để cập nhật ChatApp.json.");
+        console.error(
+          "Không tìm thấy code contract tại",
+          CHATAPP_CONTRACT_ADDRESS,
+        );
+        alert(
+          "Địa chỉ hợp đồng không hợp lệ trên mạng hiện tại. Vui lòng kiểm tra lại network trong MetaMask hoặc chạy lại script deploy để cập nhật ChatApp.json.",
+        );
         return;
       }
 
@@ -163,21 +180,18 @@ export default function Chat() {
         opContract.balanceOf(userAddress),
         provider.getBlockNumber(),
       ]);
-      setBlockchainData(prev => ({
+      setBlockchainData((prev) => ({
         ...prev,
         accountOpBalance: ethers.formatUnits(myOpBalRaw, 18),
         nbBlocks: blockNum,
       }));
 
       // Thêm dấu "_" trước các biến không dùng để vượt qua ESLint no-unused-vars
-      chatContract.on(
-        "MessageSent",
-        (from: string, to: string) => {
-          if (from === otherAccount || to === otherAccount) {
-            fetchMessages(chatContract, otherAccount, userAddress);
-          }
-        },
-      );
+      chatContract.on("MessageSent", (from: string, to: string) => {
+        if (from === otherAccount || to === otherAccount) {
+          fetchMessages(chatContract, otherAccount, userAddress);
+        }
+      });
 
       return () => {
         chatContract.removeAllListeners("MessageSent");
@@ -244,14 +258,33 @@ export default function Chat() {
   };
 
   useEffect(() => {
-    if (contract && otherAccount && account && opCoinContract) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    // 1. Kiểm tra điều kiện đầu vào
+    if (!contract || !otherAccount || !account || !opCoinContract) return;
+
+    // 2. Chạy ngay lập tức lần đầu (Vì setInterval sẽ đợi n giây mới chạy lần đầu)
+    const fetchData = () => {
       fetchMessages(contract, otherAccount, account);
       updateBalances(otherAccount);
+      console.log("Dữ liệu đã được cập nhật qua Interval");
+    };
 
-      console.log("Contract instance side effect:", contract);
-    }
-  }, [otherAccount, contract, account, opCoinContract, fetchMessages, updateBalances]);
+    fetchData();
+
+    // 3. Thiết lập vòng lặp mỗi 2 giây
+    const intervalId = setInterval(fetchData, 1000000);
+
+    // 4. Cleanup quan trọng nhất: Xóa interval khi component unmount hoặc dependencies thay đổi
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [
+    otherAccount,
+    contract,
+    account,
+    opCoinContract,
+    fetchMessages,
+    updateBalances,
+  ]);
 
   // Tự động cuộn mỗi khi mảng messages thay đổi
   useEffect(() => {
@@ -260,12 +293,13 @@ export default function Chat() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 md:p-8 font-sans">
-      <div className="grid grid-cols-1 md:grid-cols-12 w-full max-w-6xl bg-white rounded-3xl shadow-xl overflow-hidden h-[85vh] border border-slate-200">
-        {/* CỘT TRÁI: Khu vực Chat (Chiếm 8/12 cột) */}
-        <div className="md:col-span-8 flex flex-col border-r border-slate-100">
-          {/* Header */}
-          <div className="p-4 border-b border-slate-100 flex items-center gap-4 bg-white">
-            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-slate-200">
+      {/* Container chính: Thiết lập chiều cao cố định để kích hoạt scroll nội bộ */}
+      <div className="grid grid-cols-1 md:grid-cols-12 w-full max-w-6xl h-[85vh] bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+        {/* CỘT TRÁI: Khu vực Chat (Sử dụng Flex-col để phân bổ Header - Body - Footer) */}
+        <div className="md:col-span-8 flex flex-col border-r border-slate-100 h-full overflow-hidden">
+          {/* Header: Cố định phía trên (flex-shrink-0 để không bị co) */}
+          <div className="p-4 border-b border-slate-100 flex items-center gap-4 bg-white flex-shrink-0 z-10">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-slate-200 flex-shrink-0">
               <Image
                 src={mainLogo}
                 alt="Avatar"
@@ -282,8 +316,8 @@ export default function Chat() {
             />
           </div>
 
-          {/* Danh sách tin nhắn */}
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex flex-col gap-3">
+          {/* VÙNG ĐỎ: Danh sách tin nhắn (flex-1 để chiếm toàn bộ khoảng trống và overflow-y-auto để scroll) */}
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 flex flex-col gap-3 scroll-smooth">
             {messages.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
                 Nhập địa chỉ ví để bắt đầu...
@@ -292,7 +326,7 @@ export default function Chat() {
               messages.map((x, index) => (
                 <div
                   key={index}
-                  className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm shadow-sm ${
+                  className={`max-w-[70%] px-4 py-2 rounded-2xl text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300 ${
                     x.isResponse
                       ? "self-start bg-white text-slate-800 rounded-bl-none border border-slate-100"
                       : "self-end bg-indigo-600 text-white rounded-br-none"
@@ -302,11 +336,12 @@ export default function Chat() {
                 </div>
               ))
             )}
+            {/* Điểm neo để tự động cuộn xuống cuối */}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Ô nhập liệu */}
-          <div className="p-4 bg-white border-t border-slate-100 flex flex-col gap-3">
+          {/* Ô nhập liệu: Cố định ở đáy (flex-shrink-0) */}
+          <div className="p-4 bg-white border-t border-slate-100 flex flex-col gap-3 flex-shrink-0">
             <div className="flex gap-2">
               <input
                 value={inputValue}
@@ -318,7 +353,7 @@ export default function Chat() {
               />
               <button
                 onClick={handleSendMessage}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-all active:scale-95"
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-all active:scale-95 shadow-md shadow-indigo-100"
               >
                 Gửi
               </button>
@@ -336,7 +371,7 @@ export default function Chat() {
               />
               <button
                 onClick={handleSendOPCoin}
-                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-all active:scale-95"
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-all active:scale-95 shadow-md shadow-emerald-100"
               >
                 Gửi OP
               </button>
@@ -344,19 +379,14 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* CỘT PHẢI: Thông tin Blockchain (Chiếm 4/12 cột) */}
-        <div className="md:col-span-4 bg-slate-50 p-6 flex flex-col gap-6 overflow-y-auto">
+        {/* CỘT PHẢI: Thông tin Blockchain (Scroll độc lập nếu cần) */}
+        <div className="md:col-span-4 bg-slate-50 p-6 flex flex-col gap-6 overflow-y-auto h-full border-l border-slate-100">
           <div>
-            <h2 className="text-sm font-bold text-slate-600 tracking-widest mb-1 flex items-center gap-2">
-              {networkInfo.name && (
-                <span >
-                  {networkInfo.name} · ChainId {networkInfo.chainId}
-                </span>
-              )}
+            <h2 className="text-[11px] font-bold text-slate-500 tracking-[0.2em] mb-1 flex items-center gap-2 uppercase">
+              {networkInfo.name
+                ? `${networkInfo.name} · ChainId ${networkInfo.chainId}`
+                : "Network Info"}
             </h2>
-            <p className="text-2xl font-black text-slate-800">
-              {blockchainData.nbBlocks}{" "} Blocks
-            </p>
           </div>
 
           <div className="space-y-4">
@@ -364,7 +394,7 @@ export default function Chat() {
               <h4 className="text-[12px] font-bold text-indigo-500 uppercase mb-2">
                 Ví của bạn
               </h4>
-              <p className="text-[12px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2">
+              <p className="text-[12px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2 border border-slate-100">
                 {account || "Đang kết nối..."}
               </p>
               <div className="flex justify-between items-baseline">
@@ -381,7 +411,7 @@ export default function Chat() {
               <h4 className="text-[12px] font-bold text-pink-500 uppercase mb-2">
                 Ví người nhận
               </h4>
-              <p className="text-[12px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2">
+              <p className="text-[12px] font-mono text-slate-500 break-all bg-slate-50 p-2 rounded mb-2 border border-slate-100">
                 {otherAccount || "0x..."}
               </p>
               <div className="flex justify-between items-baseline">
@@ -395,11 +425,12 @@ export default function Chat() {
             </div>
           </div>
 
-          <div className="mt-auto flex items-center gap-2 py-2 px-3 bg-white rounded-lg border border-slate-200">
+          {/* Trạng thái kết nối: Cố định ở cuối cột phải */}
+          <div className="mt-auto flex items-center gap-2 py-2 px-3 bg-white rounded-lg border border-slate-200 shadow-sm">
             <div
               className={`w-2 h-2 rounded-full ${account ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
             />
-            <span className="text-[12px] font-bold text-slate-600 uppercase tracking-tight">
+            <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">
               {account ? "MetaMask Connected" : "Disconnected"}
             </span>
           </div>
